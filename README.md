@@ -35,4 +35,4 @@ Necesitas tener instalado:
 Clona el repositorio:
 
 ```bash
-git clone https://github.com/TU-USUARIO/TU-REPOSITORIO.git
+git clone https://github.com/echavarriaf/bitburner.git
