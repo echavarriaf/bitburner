@@ -4,7 +4,7 @@
     ],
     "allowDeletingFiles":false,
     "port": 12525,
-    "scriptsFolder":".",
+    "scriptsFolder":"src",
     "quiet":false,
     "dry":false,
     "definitionFile":{
