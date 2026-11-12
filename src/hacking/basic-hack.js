@@ -10,7 +10,6 @@ export async function main(ns) {
         return;
     }
 
-    
     const moneyThreshold=ns.getServerMaxMoney(target)*0.75
 
     const securityThreshold=ns.getServerMinSecurityLevel(target)+5;
@@ -33,7 +32,7 @@ export async function main(ns) {
     );
 
     ns.tprintf("");
-    ns.tprintf("Hacking automatico iniciado...");
+    ns.tprintf("Hacking automático iniciado...");
     ns.tprintf("");
 
     while(true){
