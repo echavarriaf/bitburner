@@ -1,14 +1,41 @@
-export async function main(ns) {
-    /**Decidimo que servidor atacaremos */
-    const target="n00dles";
+import {scanAllServers} from "/utils/network";
+import {getBestTarget} from "/utils/targets";
 
-    //Si el dinero disponible cae por debajo del 75% del maximo, utilizaremos grow()
+export async function main(ns) {
+    const servers=scanAllServers(ns);
+    const target=getBestTarget(ns, servers);
+
+    if (!target){
+        Node.tprintf("NO target valido encontrado");
+        return;
+    }
+
+    
     const moneyThreshold=ns.getServerMaxMoney(target)*0.75
 
-    //Permitimos que la seguridad suba hasta 5 puntos por encima de su minimo. Si supera ese limite, utilizaremos weaken()
     const securityThreshold=ns.getServerMinSecurityLevel(target)+5;
 
-    //Proceso principal
+    ns.tprintf(
+        "Objetivo seleccionado: %s",
+        target
+    );
+    ns.tprintf(
+        "Dinero Max: %s",
+        ns.format.number(ns.getServerMaxMoney(target))
+    );
+    ns.tprintf(
+        "Seguridad Min: %s",
+        ns.format.number(ns.getServerMinSecurityLevel(target))
+    );
+    ns.tprintf(
+        "Nivel Requerido: %d",
+        ns.getServerRequiredHackingLevel(target)
+    );
+
+    ns.tprintf("");
+    ns.tprintf("Hacking automatico iniciado...");
+    ns.tprintf("");
+
     while(true){
         const currentSecurity=ns.getServerSecurityLevel(target);
 
@@ -21,10 +48,25 @@ export async function main(ns) {
          * servidor preparado ->hack()
          */
         if (currentSecurity>securityThreshold){
+            ns.tprintf(
+                "WEAKEN | %s | Seguridad: %s",
+                target,
+                ns.format.number(currentSecurity)
+            );
             await ns.weaken(target);
         }else if (currentMoney<moneyThreshold){
+            ns.tprintf(
+                "GROW | %s | Dinero: %s",
+                target,
+                ns.format.number(currentMoney)
+            );
             await ns.grow(target);
         } else{
+            ns.tprintf(
+                "HACK | %s | Dinero: %s",
+                target,
+                ns.format.number(currentMoney)
+            );
             await ns.hack(target);
         }
     }
