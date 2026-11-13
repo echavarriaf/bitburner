@@ -35,11 +35,19 @@ export async function main(ns) {
     let status;
 
     if (hadRoot) {
-      status = "YA TENIA ROOT";
+      status = "YA TENÍA ROOT";
     } else if (result.success) {
       status = "ROOT OBTENIDO";
     } else {
       status = "SIN ACCESO";
+    }
+
+    /**Por ahora, solo mostraremos los nodos con estos estados */
+    if (
+      status !== "YA TENÍA ROOT" &&
+      status !== "ROOT OBTENIDO"
+    ){
+      continue;
     }
 
     rows.push({
@@ -50,6 +58,11 @@ export async function main(ns) {
       status,
     });
   }
+
+  /**ordenamos la lista por puertos necesarios */
+  rows.sort((a,b)=>{
+    return a.required - b.required
+  })
 
   const columns = [
     {
