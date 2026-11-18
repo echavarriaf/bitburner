@@ -230,3 +230,64 @@ export const upgradeCloudServer=(ns, server, targetRam)=>{
         cost,
     }
 }
+
+/**
+ * Estandariza los nombres de todos los Cloud Servers.
+ * 
+ * Formato:
+ * worker-00
+ * worker-01
+ * worker-02
+ * 
+ * @param {NS} ns
+ * @returns {{
+ * oldName:string,
+ * newName:string,
+ * renamed:boolean,
+ * }} 
+ */
+export const normalizedCloudServerNames=(ns)=>{
+  const servers=ns.cloud.getServerNames();
+
+  const results=[];
+
+  const sortedServers=[...servers].sort();
+
+  for (let index=0;index<sortedServers.length; index++){
+    const currentName=sortedServers[index];
+
+    const expectedName=`worker-${String(index).padStart(2, 0)}`;
+
+    if (currentName===expectedName){
+      results.push({
+        oldName:currentName,
+        newName:expectedName,
+        renamed:false
+      });
+      continue;
+    }
+
+    /**
+     * Si el nombre objetivo ya existe, no intentamos renombrar todavia
+     */
+    const currentServers=ns.cloud.getServerNames();
+
+    if (currentServers.includes(expectedName)){
+      results.push({
+        oldName:currentName,
+        newName:expectedName,
+        renamed:false
+      });
+      continue;
+    }
+
+    const success=ns.cloud.renameServer(currentName, expectedName);
+
+    results.push({
+        oldName:currentName,
+        newName:expectedName,
+        renamed:success
+      });
+  }
+  return results
+}
