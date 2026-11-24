@@ -1,6 +1,11 @@
 /** @param {NS} ns */
-export async function main(ns){
-    const target="n00dles"
+export async function main(ns) {
+  const target = String(ns.args[0] ?? "").trim();
 
-    await ns.hack(target);
+  if (!target) {
+    ns.tprintf("ERROR: Debes indicar un objetivo");
+    return;
+  }
+
+  await ns.hack(target);
 }
