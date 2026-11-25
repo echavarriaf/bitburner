@@ -1,11 +1,10 @@
 import { getInfrastructureDecision } from "utils/infrastructure";
-import { purchaseCloudWorker, upgradeCloudServer, normalizedCloudServerNames } from "utils/cloud";
-import { deployWorker } from "utils/deploy";
-import { scanAllServers } from "utils/network";
-import { getBestTarget } from "utils/targets";
+import {
+  purchaseCloudWorker,
+  upgradeCloudServer,
+  normalizedCloudServerNames,
+} from "utils/cloud";
 import { logTable } from "utils/table";
-
-const WORKER_SCRIPT = "/hacking/worker.js";
 
 const CHECK_INTERVAL = 10000;
 
@@ -25,53 +24,31 @@ export async function main(ns) {
 
   while (true) {
     ns.clearLog();
-    const renamedServers=normalizedCloudServerNames(ns);
+    const renamedServers = normalizedCloudServerNames(ns);
 
-    for (const result of renamedServers){
-        if (!result.renamed){
-            continue;
-        }
+    for (const result of renamedServers) {
+      if (!result.renamed) {
+        continue;
+      }
 
-        ns.print(`Servidor renombrado: ${result.oldName} ->${result.newName}`);
-    }
-
-    const networkServers = scanAllServers(ns);
-
-    const target = getBestTarget(ns, networkServers);
-
-    if (!target) {
-      ns.print("No se encontro un objetivo valido.");
-      await waitForNextCheck(ns);
-      continue;
+      ns.print(`Servidor renombrado: ${result.oldName} ->${result.newName}`);
     }
 
     const decision = getInfrastructureDecision(ns);
 
-    printHeader(ns, decision, target);
-
+    printHeader(ns, decision);
     printCloudServers(ns);
-
-    ns.print("");
-
     printDecision(ns, decision);
 
-    ns.print("");
-
-    ns.print(`Dinero: $${ns.format.number(decision.money)}`);
-
-    ns.print(
-      `Cloud Servers: ${decision.serverCount} / ${decision.serverLimit}`,
-    );
-    ns.print(`Target de hacking: ${target}`);
-
-    ns.print("");
-
-    if (decision.action === "UPGRADE") {
-      await handleUpgrade(ns, decision, target);
-    } else if (decision.action === "BUY") {
-      await handlePurchase(ns, decision, target);
-    } else {
-      ns.print("Sin cambios en esta revision");
+    switch (decision.action){
+      case "BUY": 
+        await handlePurchase(ns, decision);
+        break;
+      case "UPGRADE": 
+        await handleUpgrade(ns, decision);
+        break;
+      case "WAIT":
+        break;
     }
 
     await waitForNextCheck(ns);
@@ -85,7 +62,6 @@ export async function main(ns) {
  * @param {NS} ns
  */
 const printCloudServers = (ns) => {
-  const workerPath = WORKER_SCRIPT.replace(/^\/+/, "");
 
   const servers = ns.cloud
     .getServerNames()
@@ -96,27 +72,11 @@ const printCloudServers = (ns) => {
 
       const freeRam = Math.max(maxRam - usedRam, 0);
 
-      /**
-       * Buscamos todas las instancias de worker.js ejecutandose en este servidor
-       */
-
-      const workerProcesses = ns.ps(server).filter((process) => {
-        const proceePath = process.filename.replace(/^\/+/, "");
-
-        return proceePath === workerPath;
-      });
-
-      const threads = workerProcesses.reduce(
-        (total, process) => total + process.threads,
-        0,
-      );
-
       return {
         server,
         maxRam,
         usedRam,
-        freeRam,
-        threads,
+        freeRam
       };
     })
     .sort((a, b) => {
@@ -136,7 +96,6 @@ const printCloudServers = (ns) => {
     maxRam: `${ns.format.number(server.maxRam)} GB`,
     usedRam: `${ns.format.number(server.usedRam)} GB`,
     freeRam: `${ns.format.number(server.freeRam)} GB`,
-    threads: server.threads,
   }));
 
   const columns = [
@@ -160,17 +119,17 @@ const printCloudServers = (ns) => {
       label: "LIBRE",
       align: "right",
     },
-    {
-      key: "threads",
-      label: "THREADS",
-      align: "right",
-    },
   ];
 
   logTable(ns, columns, rows);
 };
 
-const printHeader = (ns, decision, target) => {
+/**
+ * Muestra el estado general del administrador
+ * @param {NS} ns 
+ * @param {Object} decision 
+ */
+const printHeader = (ns, decision) => {
   ns.print("=== ADMINISTRADOR DE INGRAESTRUCTURA ===");
 
   ns.print("");
@@ -179,11 +138,14 @@ const printHeader = (ns, decision, target) => {
 
   ns.print(`Cloud Servers: ${decision.serverCount} / ${decision.serverLimit}`);
 
-  ns.print(`Target de hacking: ${target}`);
-
   ns.print("");
 };
 
+/**
+ * Muestra la proxima decision del administrador
+ * @param {NS} ns 
+ * @param {Object} decision 
+ */
 const printDecision = (ns, decision) => {
   ns.print(`Decision: ${decision.action}`);
   ns.print(`Motivo: ${decision.reason}`);
@@ -205,72 +167,53 @@ const printDecision = (ns, decision) => {
 
 /**
  * Mejorar un servidor y reinicia su worker para aprovechar la nueva RAM
+ * 
+ * El servidor queda disponible para que hack-manager lo utilice
  *
  * @param {NS} ns
  * @param {Object} decision
- * @param {string} target
  */
-const handleUpgrade = async (ns, decision, target) => {
+const handleUpgrade = async (ns, decision) => {
   ns.print(`Mejorando ${decision.server}...`);
 
   const result = upgradeCloudServer(ns, decision.server, decision.targetRam);
 
   if (!result.success) {
-    ns.print("No fue posible mejorar el servidor.");
+    ns.print("");
+    ns.print(`ERROR: ${result.reason}`);
     return;
   }
 
+  ns.print("");
+  ns.print(`${decision.server} mejorado correctamente`);
   ns.print(`${result.oldRam} GB -> ${result.newRam} GB`);
-
-  ns.scriptKill(WORKER_SCRIPT, decision.server);
-
-  const deployResult = await deployWorker(
-    ns,
-    decision.server,
-    WORKER_SCRIPT,
-    target,
-  );
-
-  if (!deployResult.success) {
-    ns.print("Upgrade completado, pero el worker no pudo iniciar");
-    return;
-  }
-
-  ns.print(`Worker reiniciado con ${deployResult.threads} threads`);
 };
 
 /**
- * Compra un nuevo servidor y despliega inmediatamente worker.js
+ * Compra un nuevo servidor.
+ * 
+ * No despliega nada
+ * 
+ * El hack manager detectara automaticamente la nueva capacidad disponible
  *
  * @param {NS} ns
  * @param {Object} decision
- * @param {string} target
  */
-const handlePurchase = async (ns, decision, target) => {
+const handlePurchase = async (ns, decision) => {
   ns.print(`Comprando servidor de ${decision.targetRam} GB...`);
 
   const result = purchaseCloudWorker(ns, decision.targetRam);
 
   if (!result.success) {
-    ns.print("No fue posible comprar el servidor.");
+    ns.print("");
+    ns.print(`ERROR: ${result.reason}`);
     return;
   }
 
-  ns.print(`Servidor creado: ${result.hostname}`);
+  ns.print("");
+  ns.print(`Servidor comprado: ${result.hostname}`);
 
-  const deployResult = await deployWorker(
-    ns,
-    result.hostname,
-    WORKER_SCRIPT,
-    target,
-  );
-
-  if (!deployResult.success) {
-    ns.print("Servidor comprado, pero el worker no pudo iniciar");
-    return;
-  }
-
-  ns.print(`Worker reiniciado con ${deployResult.threads} threads`);
+  ns.print(`RAM: ${ns.format.ram(decision.targetRam)}`);
 };
 
 /**
